@@ -6,7 +6,7 @@ public class Launcher {
     public static void main(String[] args) {
 
         Vertx vertx = Vertx.vertx();
-        vertx.deployVerticle(new BinanceWebsocket(), deploymentResult -> {
+        vertx.deployVerticle(new BinanceWebsocketVerticle(), deploymentResult -> {
             if (deploymentResult.succeeded()) {
                 System.out.println("Websocket verticle deployed");
             } else {
