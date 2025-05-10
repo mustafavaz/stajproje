@@ -9,16 +9,11 @@ import io.vertx.ext.mongo.MongoClient;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
-
-import java.util.HashSet;
-import java.util.Set;
-
-
 public class BinanceWebsocketVerticle extends AbstractVerticle {
     private static final String BINANCE_STREAM_TYPE = "aggTrade";
     private WebSocket webSocket;
     private HttpClient httpClient;
-    private Set<String> subscribedSymbols = new HashSet<>();
+
 
 
     private static final String DB_NAME = "staj-proje";
@@ -74,12 +69,12 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
 
         mongoClient.find(SUBS_COLLECTION, new JsonObject(), res -> {
             if (res.succeeded()) {
-                res.result().forEach(data -> subscribedSymbols.add(data.getString("symbol")));
+                res.result().forEach(data -> SubscribedSymbols.getInstance().addSymbol(data.getString("symbol")));
                 System.out.println("Subs added to list");
+                System.out.println("List: " + SubscribedSymbols.getSubscribedSymbols());
                 connectToBinance(startPromise);
             }
         });
-
 
     }
 
@@ -91,15 +86,15 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
             return;
         }
         JsonObject delete = new JsonObject().put("symbol", symbol);
-        if(!subscribedSymbols.contains(delete.getString("symbol"))) {
+        if(!SubscribedSymbols.getInstance().containsSymbol(delete.getString("symbol"))) {
             ctx.response().setStatusCode(500).putHeader("content-type", "text-plain").end("Symbol is not subscribed");
             return;
         }
 
         mongoClient.removeDocument(SUBS_COLLECTION,delete,res ->{
             if (res.succeeded()) {
-                subscribedSymbols.remove(symbol);
-                subscribeToAllSymbols();
+                SubscribedSymbols.getInstance().removeSymbol(symbol);
+                System.out.println("List after removing: " + SubscribedSymbols.getSubscribedSymbols());
                 ctx.response().setStatusCode(200).end("Unsubscribed to " + symbol);
                 System.out.println("Subscription removed from MongoDB for :" + symbol);
             }else {
@@ -107,6 +102,20 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
                 System.err.println("Could not unsubscribe to: " + symbol +  " " + res.cause().getMessage());
             }
 
+        });
+        int requestID = 1;
+        String streamName = symbol.toLowerCase() + "@" +  BINANCE_STREAM_TYPE;
+        JsonObject unsubscribeRequest = new JsonObject()
+                .put ("method", "UNSUBSCRIBE")
+                .put ("params", new JsonArray().add(streamName))
+                .put ("id",  requestID );
+        String messageToSend = unsubscribeRequest.encode();
+        webSocket.writeTextMessage(messageToSend,  msg -> {
+            if (msg.succeeded()) {
+                System.out.println("Unsubscribe message sent for: " + symbol);
+            }else {
+                System.err.println("Could not subscribe to: " + symbol + " " + msg.cause().getMessage());
+            }
         });
     }
 
@@ -116,20 +125,34 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
 
         JsonObject jsonSubs = new JsonObject()
                 .put("symbol", symbol);
-        if(subscribedSymbols.contains(jsonSubs.getString("symbol"))) {
+        if(SubscribedSymbols.getInstance().containsSymbol(jsonSubs.getString("symbol"))) {
             ctx.response().setStatusCode(500).putHeader("content-type", "text-plain").end("Symbol already subscribed");
             System.out.println("Symbol already subscribed");
             return;
         }
         mongoClient.insert(SUBS_COLLECTION,jsonSubs,res ->{
             if (res.succeeded()) {
-                subscribedSymbols.add(symbol);
-                subscribeToAllSymbols();
+                SubscribedSymbols.getInstance().addSymbol(symbol);
+                System.out.println("List after adding: " + SubscribedSymbols.getSubscribedSymbols());
                 ctx.response().setStatusCode(200).end("Subscribed to " + symbol);
                 System.out.println("Subscription saved to MongoDB");
             }else {
                 ctx.response().setStatusCode(500).end("Failed to subscribe: " + res.cause().getMessage());
                 System.out.println("Failed to save subscription to MongoDB");
+            }
+        });
+        int requestID = 1;
+        String streamName = symbol.toLowerCase() + "@" +  BINANCE_STREAM_TYPE;
+        JsonObject subscribeRequest = new JsonObject()
+                .put ("method", "SUBSCRIBE")
+                .put ("params", new JsonArray().add(streamName))
+                .put ("id",  requestID );
+        String messageToSend = subscribeRequest.encode();
+        webSocket.writeTextMessage(messageToSend,  msg -> {
+            if (msg.succeeded()) {
+                System.out.println("Subscribe message sent for: " + symbol);
+            }else {
+                System.err.println("Could not subscribe to: " + symbol + " " + msg.cause().getMessage());
             }
         });
 
@@ -154,7 +177,6 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
                     System.err.println("Websocket error: " + err.getMessage());
                     reconnect();
                 });
-
                 subscribeToAllSymbols();
                 startPromise.complete();
             } else {
@@ -165,11 +187,14 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
     }
 
     private void subscribeToAllSymbols() {
+        System.out.println("subscribeToAllSymbols: "  + SubscribedSymbols.getSubscribedSymbols());
 
-        if(!subscribedSymbols.isEmpty()){
+
+        if(!SubscribedSymbols.getSubscribedSymbols().isEmpty()){
             JsonArray streams = new JsonArray();
-            for (String symbol : subscribedSymbols) {
+            for (String symbol : SubscribedSymbols.getSubscribedSymbols()) {
                 streams.add(symbol.toLowerCase() + "@" +  BINANCE_STREAM_TYPE);
+                System.out.println("Streams: " + streams.encodePrettily());
             }
             JsonObject subscribeRequest = new JsonObject()
                     .put ("method", "SUBSCRIBE").put ("params", streams).put("id",  1);
@@ -179,7 +204,7 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
     }
 
     private void reconnect() {
-        vertx.setTimer(50000, l -> {
+        vertx.setTimer(5000, l -> {
             connectToBinance(Promise.promise());
         });
     }

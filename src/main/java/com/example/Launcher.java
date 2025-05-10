@@ -4,6 +4,7 @@ import io.vertx.core.Vertx;
 
 public class Launcher {
     public static void main(String[] args) {
+        int coreCount = Runtime.getRuntime().availableProcessors();
 
         Vertx vertx = Vertx.vertx();
         vertx.deployVerticle(new BinanceWebsocketVerticle(), deploymentResult -> {
@@ -13,12 +14,14 @@ public class Launcher {
                 System.err.println("Websocket verticle failed: " + deploymentResult.cause().getMessage());
             }
         });
-        vertx.deployVerticle(new DataAccessVerticle(), deploymentResult -> {
-            if (deploymentResult.succeeded()) {
-                System.out.println("DataAccess verticle deployed");
-            }else  {
-                System.err.println("DataAccess verticle failed: " + deploymentResult.cause().getMessage());
-            }
-        });
+        for (int i = 0; i <= coreCount; i++) {
+            vertx.deployVerticle(new DataAccessVerticle(), deploymentResult -> {
+                if (deploymentResult.succeeded()) {
+                    System.out.println("DataAccess verticle deployed");
+                } else {
+                    System.err.println("DataAccess verticle failed: " + deploymentResult.cause().getMessage());
+                }
+            });
+        }
     }
 }

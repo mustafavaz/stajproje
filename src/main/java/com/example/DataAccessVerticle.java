@@ -11,32 +11,33 @@ import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
 
-import java.util.HashSet;
-import java.util.Set;
-
-
 public class DataAccessVerticle extends AbstractVerticle {
 
-    private Set<String> subscribedSymbols = new HashSet<>();
     private MongoClient mongoClient;
     private static final String DB_NAME = "staj-proje";
     private static final String COLLECTION_NAME = "feed";
     private static final String SUBS_COLLECTION = "subs";
 
 
+
+
     @Override
     public void start(Promise<Void> startPromise){
 
-        startServer(startPromise);
+        startMongoClient();
+        startHttpServer(startPromise);
+
 
     }
 
-    private void startServer(Promise<Void> startPromise) {
-
+    private void startMongoClient() {
         JsonObject mongoConfig = new JsonObject()
                 .put("db_name", DB_NAME)
                 .put("connection_string", "mongodb://localhost:27017");
         mongoClient = MongoClient.createShared(vertx, mongoConfig);
+    }
+
+    private void startHttpServer(Promise<Void> startPromise) {
 
         HttpServer server = vertx.createHttpServer();
         Router router = Router.router(vertx);
@@ -53,15 +54,6 @@ public class DataAccessVerticle extends AbstractVerticle {
             }
         });
 
-        mongoClient.find(SUBS_COLLECTION, new JsonObject(), res -> {
-            if (res.succeeded()) {
-                res.result().forEach(sub -> subscribedSymbols.add(sub.getString("symbol")));
-                startPromise.complete();
-            }else {
-                startPromise.fail(res.cause());
-            }
-        });
-
     }
 
     private void dataBySymbolHandler(RoutingContext ctx) {
@@ -69,9 +61,8 @@ public class DataAccessVerticle extends AbstractVerticle {
         JsonObject query = new JsonObject().put("symbol", symbol);
         JsonObject sort = new JsonObject().put("timestamp", -1);
         FindOptions options = new FindOptions().setSort(sort);
-        if (!subscribedSymbols.contains(symbol)) {
-            ctx.response().setStatusCode(500).putHeader("content-type","text-plain").end("Symbol not subscribed");
-            return;
+        if (!SubscribedSymbols.getInstance().containsSymbol(symbol)) {
+            ctx.response().setStatusCode(404).putHeader("content-type", "text-plain").end("Symbol not subscribed");
         }
         mongoClient.findWithOptions(COLLECTION_NAME, query, options, res -> {
             if (res.succeeded()) {
