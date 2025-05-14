@@ -63,6 +63,7 @@ public class DataAccessVerticle extends AbstractVerticle {
         FindOptions options = new FindOptions().setSort(sort);
         if (!SubscribedSymbols.getInstance().containsSymbol(symbol)) {
             ctx.response().setStatusCode(404).putHeader("content-type", "text-plain").end("Symbol not subscribed");
+            return;
         }
         mongoClient.findWithOptions(COLLECTION_NAME, query, options, res -> {
             if (res.succeeded()) {

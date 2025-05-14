@@ -29,6 +29,7 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
        startHttpServer();
        startHttpClient(startPromise);
 
+
     }
 
     private void startMongoClient() {
@@ -221,6 +222,7 @@ public class BinanceWebsocketVerticle extends AbstractVerticle {
                     .put("symbol", symbol.toLowerCase())
                     .put("price", price)
                     .put("timestamp", timestamp);
+            vertx.eventBus().publish("trades", priceMessage);
 
             mongoClient.insert(COLLECTION_NAME, priceMessage, res -> {
                 if (res.succeeded()) {

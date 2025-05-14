@@ -15,7 +15,6 @@ public class SubscribedSymbols {
 
     public static SubscribedSymbols getInstance() {
         return instance;
-
     }
     public static Set<String> getSubscribedSymbols() {
         return instance.subscribedSymbols;

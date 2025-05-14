@@ -4,6 +4,7 @@ import io.vertx.core.Vertx;
 
 public class Launcher {
     public static void main(String[] args) {
+
         int coreCount = Runtime.getRuntime().availableProcessors();
 
         Vertx vertx = Vertx.vertx();
@@ -23,5 +24,14 @@ public class Launcher {
                 }
             });
         }
+        vertx.deployVerticle(new WebsocketServerVerticle(), deploymentResult -> {
+            if (deploymentResult.succeeded()) {
+                System.out.println("Websocket server deployed");
+            }  else {
+                System.err.println("Websocket server failed: " + deploymentResult.cause().getMessage());
+            }
+        });
+
+
     }
 }
